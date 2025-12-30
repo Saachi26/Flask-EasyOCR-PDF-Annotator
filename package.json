@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "scripts": {
+    "start": "concurrently \"flask --app server run --debug --port 5002\" \"cd frontend && npm run dev\""
+  }
+}

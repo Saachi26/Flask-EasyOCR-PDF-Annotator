@@ -1,0 +1,65 @@
+# --- OS & System Files ---
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- IDE & Editors ---
+.vscode/
+.idea/
+
+# --- Python (Backend) ---
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# Distribution / Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Node.js / React / Vite (Frontend) ---
+# Dependencies (covers root and frontend folder recursively)
+node_modules/
+
+# Production Build Output
+dist/
+dist-ssr/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Environment Variables (Secrets) ---
+# NEVER commit these files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Project Specific ---
+# Based on your explorer, you likely don't want to commit uploaded files
+uploads/
+
+# Ignore local Vite host config
+*.local
