@@ -1,0 +1,17 @@
+# --- Core ---
+flask>=3.0
+flask-cors>=4.0
+pymupdf>=1.24        # PDF render + embedded-text extraction (no poppler needed)
+opencv-python>=4.8
+numpy>=1.24
+
+# --- Default OCR engine (OCR_ENGINE=easyocr) ---
+easyocr>=1.7         # pulls in torch; used only for real scans
+
+# --- Optional OCR engines (install only if you set OCR_ENGINE to one of these) ---
+# pytesseract>=0.3.10   # OCR_ENGINE=tesseract  — also needs the `tesseract` system binary
+# paddleocr>=2.7        # OCR_ENGINE=paddle     — also needs paddlepaddle
+# transformers>=4.40    # OCR_ENGINE=trocr      — handwriting; uses easyocr for line detection
+
+# --- Dev / tests ---
+pytest>=8.0

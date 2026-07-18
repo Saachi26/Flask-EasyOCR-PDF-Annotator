@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    image: doculens
+    ports:
+      - "7860:7860"
+    environment:
+      - OCR_ENGINE=easyocr
+      # - EASYOCR_GPU=0        # force CPU/GPU
+      # - RENDER_DPI=300       # sharper (slower) rendering
+    volumes:
+      - ./uploads:/app/uploads   # persist processed pages across restarts

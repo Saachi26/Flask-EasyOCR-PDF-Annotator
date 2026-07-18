@@ -1,119 +1,143 @@
-from flask import Flask, request, jsonify, render_template, send_file
-from flask_cors import CORS
-import easyocr
-import numpy as np
-import cv2
+"""
+Flask API for the PDF annotator.
+
+Thin routing layer — all document work lives in pipeline.py. The OCR engine is
+loaded lazily on the first page that actually needs OCR, so startup is fast.
+"""
+
 import os
-from pdf2image import convert_from_path, pdfinfo_from_path
+
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
-app = Flask(__name__, template_folder='templates', static_folder='static')
+import pipeline
+
+# In production the built React app is served from here (single-origin deploy).
+FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist")
+
+app = Flask(__name__, static_folder=FRONTEND_DIST, static_url_path="")
 CORS(app)
 
-UPLOAD_FOLDER = 'uploads'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# Reject oversized uploads early (default 50 MB).
+app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 
-print("⏳ Loading AI Brain...")
-reader = easyocr.Reader(['en'], gpu=True)
-print("✅ AI Model Loaded!")
+ALLOWED_EXTENSIONS = {".pdf"}
 
-# --- MEMORY CACHE ---
-OCR_CACHE = {}
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+def _allowed(filename):
+    return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/upload', methods=['POST'])
+
+@app.route("/upload", methods=["POST"])
 def upload_pdf():
-    if 'file' not in request.files:
+    if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
-    
-    file = request.files['file']
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
     filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if not filename or not _allowed(filename):
+        return jsonify({"error": "Only PDF files are supported"}), 400
+
+    filepath = os.path.join(pipeline.UPLOAD_FOLDER, filename)
+    pipeline.invalidate(filename)          # clear stale cache before overwriting
     file.save(filepath)
-    
-    # Process Page 1
-    return process_page(filename, filepath, 1)
 
-@app.route('/change-page', methods=['POST'])
-def change_page():
-    data = request.json
-    filename = data.get('filename')
-    page_num = data.get('page')
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
-    return process_page(filename, filepath, page_num)
-
-def process_page(filename, filepath, page_num):
-    """
-    Standardized Page Processor
-    """
-    # 1.GET TOTAL PAGES
     try:
-        info = pdfinfo_from_path(filepath)
-        total_pages = info["Pages"]
-    except:
-        return jsonify({"error": "Invalid PDF or Poppler not installed"}), 500
+        total = pipeline.get_page_count(filename)
+    except Exception as e:
+        print(f"⚠️ Could not open PDF: {e}")
+        return jsonify({"error": "Invalid or corrupt PDF"}), 400
+    if total > pipeline.MAX_PAGES:
+        return jsonify({"error": f"PDF too long (max {pipeline.MAX_PAGES} pages)"}), 400
 
-    # Safety Check: Prevent going out of bounds
-    if page_num < 1: page_num = 1
-    if page_num > total_pages: page_num = total_pages
+    try:
+        payload = pipeline.process_page(filename, 1)
+    except Exception as e:
+        print(f"⚠️ Failed to process page 1: {e}")
+        return jsonify({"error": "Failed to process PDF"}), 500
 
-    cache_key = f"{filename}_page{page_num}"
-    image_filename = f"{filename}_page{page_num}.jpg"
-    image_path = os.path.join(app.config['UPLOAD_FOLDER'], image_filename)
-    
-    # 2. GENERATE IMAGE
-    if not os.path.exists(image_path):
-        images = convert_from_path(filepath, dpi=150, first_page=page_num, last_page=page_num)
-        if not images: return jsonify({"error": "Page not found"}), 404
-        images[0].save(image_path, 'JPEG')
-        width, height = images[0].size
-    else:
-        img = cv2.imread(image_path)
-        height, width, _ = img.shape
+    # Process the rest of the document in the background while the user reads.
+    pipeline.start_background_job(filename)
+    return jsonify(payload)
 
-    # 3. RUN OCR
-    if cache_key in OCR_CACHE:
-        print(f"⚡ Using Cached OCR for Page {page_num}")
-        ocr_data = OCR_CACHE[cache_key]
-    else:
-        print(f"🤖 Running AI on Page {page_num}...")
-        img = cv2.imread(image_path)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        results = reader.readtext(gray, detail=1, paragraph=False)
-        
-        ocr_data = []
-        for (bbox, text, prob) in results:
-            if prob > 0.3: 
-                (tl, tr, br, bl) = bbox
-                ocr_data.append({
-                    "text": text,
-                    "x": int(tl[0]),
-                    "y": int(tl[1]),
-                    "w": int(tr[0] - tl[0]),
-                    "h": int(bl[1] - tl[1])
-                })
-        
-        OCR_CACHE[cache_key] = ocr_data
 
-    return jsonify({
-        "success": True, 
-        "image_url": f"/get-image/{image_filename}",
-        "ocr_data": ocr_data, 
-        "width": width,       
-        "height": height,     
-        "current_page": page_num,
-        "total_pages": total_pages,
-        "filename": filename
-    })
+@app.route("/change-page", methods=["POST"])
+def change_page():
+    data = request.get_json(silent=True) or {}
+    filename = secure_filename(data.get("filename") or "")
+    if not filename:
+        return jsonify({"error": "Missing filename"}), 400
 
-@app.route('/get-image/<filename>')
+    try:
+        page_num = int(data.get("page"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid page number"}), 400
+
+    if not os.path.exists(os.path.join(pipeline.UPLOAD_FOLDER, filename)):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        return jsonify(pipeline.process_page(filename, page_num))
+    except Exception as e:
+        print(f"⚠️ Failed to process page: {e}")
+        return jsonify({"error": "Failed to process page"}), 500
+
+
+@app.route("/status", methods=["GET"])
+def status():
+    filename = secure_filename(request.args.get("filename") or "")
+    if not filename:
+        return jsonify({"error": "Missing filename"}), 400
+    return jsonify(pipeline.get_status(filename))
+
+
+@app.route("/search", methods=["POST"])
+def search():
+    data = request.get_json(silent=True) or {}
+    filename = secure_filename(data.get("filename") or "")
+    query = data.get("query") or ""
+    if not filename:
+        return jsonify({"error": "Missing filename"}), 400
+    return jsonify({"results": pipeline.search(filename, query)})
+
+
+@app.route("/get-image/<path:filename>")
 def get_image(filename):
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    # send_from_directory rejects paths that escape UPLOAD_FOLDER (no traversal).
+    return send_from_directory(pipeline.UPLOAD_FOLDER, filename)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002, debug=True)
+
+@app.route("/thumbnail/<path:filename>/<int:page>")
+def thumbnail(filename, page):
+    fn = secure_filename(filename)
+    if not fn or not os.path.exists(os.path.join(pipeline.UPLOAD_FOLDER, fn)):
+        return jsonify({"error": "File not found"}), 404
+    try:
+        path = pipeline.get_thumbnail(fn, page)
+    except Exception as e:
+        print(f"⚠️ Thumbnail failed: {e}")
+        return jsonify({"error": "Failed to render thumbnail"}), 500
+    return send_from_directory(pipeline.UPLOAD_FOLDER, os.path.basename(path))
+
+
+@app.route("/health")
+def health():
+    return jsonify({"ok": True})
+
+
+@app.route("/")
+def index():
+    # Serve the built SPA in production; in dev the Vite server handles the UI.
+    if os.path.exists(os.path.join(FRONTEND_DIST, "index.html")):
+        return send_from_directory(FRONTEND_DIST, "index.html")
+    return jsonify({"ok": True, "message": "API running (frontend not built)"}), 200
+
+
+if __name__ == "__main__":
+    debug = os.environ.get("FLASK_DEBUG", "0").strip().lower() in ("1", "true", "yes", "on")
+    port = int(os.environ.get("PORT", "5002"))
+    app.run(host="0.0.0.0", port=port, debug=debug, threaded=True)

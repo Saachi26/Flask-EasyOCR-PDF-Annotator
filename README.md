@@ -1,177 +1,176 @@
-# 🎥 Flask-EasyOCR-PDF-Annotator
+<div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-2.0%2B-black?style=for-the-badge&logo=flask&logoColor=white)
-![React](https://img.shields.io/badge/React-Vite-blue?style=for-the-badge&logo=react)
-![EasyOCR](https://img.shields.io/badge/EasyOCR-Ready-green?style=for-the-badge)
-![OpenCV](https://img.shields.io/badge/OpenCV-Computer%20Vision-red?style=for-the-badge&logo=opencv&logoColor=white)
+# 📄 DocuLens
 
----
+**Turn any PDF — even a scanned image — into a searchable, selectable, annotatable document.**
 
- A full-stack intelligence system that turns scanned, non-selectable PDFs into interactive, searchable, and annotatable documents.
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
+![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![PyTorch](https://img.shields.io/badge/EasyOCR-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
-- Many PDFs are image-based scans
-- Text cannot be selected, searched, or copied
-- Highlighting and annotation are impossible
-- These PDFs behave like static images rather than documents
+_[Live Demo](#) · [How it works](#-how-it-works) · [Quick start](#-quick-start)_
 
----
+</div>
 
-## 🚀 Overview
+> **Replace the links above** with your Hugging Face Space URL once deployed (see [DEPLOY.md](DEPLOY.md)).
 
-Flask-EasyOCR-PDF-Annotator converts scanned PDFs into fully interactive documents.
-
-Pipeline overview:
-
-1. Upload scanned or image-based PDFs
-2. Convert PDF pages to images using pdf2image
-3. Extract text and bounding boxes with EasyOCR and OpenCV
-4. Serve pages through a React-based viewer
-5. Allow users to annotate, highlight, and interact with content
+<!-- Add a screen recording here — this is the single most important thing an interviewer sees. -->
+<p align="center">
+  <img src="screenshots/demo.gif" alt="DocuLens demo" width="820">
+</p>
 
 ---
 
-## 🛠️ Tech Stack
+## The problem
 
-### Backend
+A huge share of the world's documents — textbooks, contracts, archives, receipts —
+exist only as **scanned images inside PDFs**. To a computer they're just pictures:
 
-- Python 3.8+
-- Flask (API server)
-- EasyOCR (PyTorch-based OCR)
-- pdf2image (PDF to image conversion)
-- OpenCV (image preprocessing)
-- NumPy
+- ❌ Text can't be selected, searched, or copied
+- ❌ You can't highlight or annotate meaningfully
+- ❌ They behave like flat images, not documents
 
-### Frontend
-
-- React (Vite)
-- JSX
-- HTML5 / CSS3
-- Canvas API (pen, highlighter, eraser tools)
-- Fetch API
+**DocuLens** makes them behave like real documents — in the browser.
 
 ---
 
-## ⚡ Installation & Setup
+## ✨ Features
 
-Both backend and frontend are required.
-
----
-
-## 🔹 Step 1: Prerequisites
-
-Poppler is required for pdf2image.
-
-### macOS (Homebrew)
-
-    brew install poppler
-
-### Windows
-
-1. Download the latest Poppler binary for Windows
-2. Extract the archive
-3. Add the `bin` directory (for example: C:\Program Files\poppler-xx\bin) to your System PATH
-4. Restart the terminal
+| | |
+|---|---|
+| 🧠 **Right tool per page** | Detects whether a page already has a real text layer and reads it directly (instant, perfect). Only *actual scans* are sent to OCR. |
+| ⚡ **Digital-text fast path** | Non-scanned PDFs skip OCR entirely — sub-second, 100% accurate. Shown live via a `⚡ Digital text / 🔍 OCR` badge. |
+| 🔍 **Cross-page search** | Search the recognized text across every processed page and jump straight to a hit, highlighted on the page. |
+| 🖊️ **Annotate** | Pen, highlighter, and eraser on a canvas layer. Annotations **persist across page changes and zoom** (stored in zoom-independent coordinates). |
+| 🚀 **Background OCR + progress** | Page 1 loads immediately; the rest of the document processes in a background thread with a live progress bar. |
+| 💾 **Process once, ever** | Every page's text + image is cached to disk, so re-opening a page is instant even after a restart. |
+| 🔌 **Pluggable OCR** | EasyOCR by default; swap to Tesseract or PaddleOCR via a single env var, behind one interface. |
 
 ---
 
-## 🔹 Step 2: Clone the Repository
+## 🏗️ Architecture
 
-    git clone https://github.com/Saachi26/Flask-EasyOCR-PDF-Annotator.git
-    cd Flask-EasyOCR-PDF-Annotator
+Single-origin deploy: the React app is built to static files and served by Flask
+alongside the API, so the whole thing runs as **one container**.
 
----
+```mermaid
+flowchart TB
+    UI["React UI<br/>viewer · toolbar · search"] -->|HTTP| API["Flask routes<br/>/upload /change-page /status /search"]
+    API --> PIPE["pipeline.py"]
+    API --> BG["background worker<br/>whole doc + progress"]
+    BG --> PIPE
+    PIPE --> RENDER["PyMuPDF render page"]
+    RENDER --> DECIDE{"page has a<br/>text layer?"}
+    DECIDE -- yes --> EMB["extract text + boxes<br/>instant, no OCR"]
+    DECIDE -- no --> OCR["preprocess → OCR engine"]
+    OCR --> ENG["ocr_engines.py<br/>EasyOCR · Tesseract · Paddle"]
+    EMB --> CACHE[("disk cache<br/>JSON + JPG")]
+    OCR --> CACHE
+    CACHE -->|cache hit| API
+```
 
-## 🔹 Step 3: Backend Setup (Python)
-
-Create and activate a virtual environment:
-
-    python -m venv venv
-
-Windows:
-
-    venv\Scripts\activate
-
-macOS / Linux:
-
-    source venv/bin/activate
-
-Install dependencies manually:
-
-    pip install flask flask-cors easyocr opencv-python numpy pdf2image
-
-Note:
-- EasyOCR downloads OCR models on first run
-- Initial execution may take a moment
+**The core idea** (`pipeline.py`): a page is only ever OCR'd if it truly needs it,
+and only once — everything else is a cache hit or the embedded-text fast path.
 
 ---
 
-## 🔹 Step 4: Frontend Setup (React + Vite)
+## 🧩 How it works
 
-Navigate to the frontend directory and install dependencies:
+A few decisions worth calling out:
 
-    cd frontend
-    npm install
+- **Embedded-text detection.** `PyMuPDF` renders pages *and* exposes the embedded
+  text layer. If a page has real words, we use them directly (with exact word
+  boxes) — no OCR, no error, instant. Only image-only scans hit the OCR engine.
+  This makes the app faster **and** more accurate on the common case.
 
----
+- **Zoom-independent annotations.** Strokes are stored per page in the page's
+  *natural* pixel space and re-rendered at the current zoom, so drawings survive
+  zooming and page navigation instead of being wiped on every redraw.
 
-## ▶️ Running the Application
+- **Cache is self-sufficient.** Each page's OCR/text, dimensions, and page count
+  are cached to disk as JSON. A cached page is served **without even opening the
+  source PDF**, which is what keeps navigation instant.
 
-The project uses a single command to run both backend and frontend.
+- **Concurrency done carefully.** The OCR model isn't thread-safe, so its calls
+  are serialized behind a lock — while rendering, caching, and cache hits stay
+  concurrent, and a background thread processes the rest of the document.
 
-Ensure `concurrently` is installed:
-
-    npm install concurrently --save-dev
-
-Start both servers:
-
-    npm run start
-
-This runs:
-- Flask backend on port 5002 using `server.py`
-- React (Vite) frontend development server
-
----
-
-## 🌐 Access the App
-
-Open your browser at:
-
-    http://localhost:5173
-
-(Port may vary depending on Vite configuration)
+- **Pluggable engines.** Every OCR backend implements one `readtext(image)`
+  method returning normalized boxes, selected by the `OCR_ENGINE` env var.
 
 ---
 
-## 🎮 How to Use
+## 🛠️ Tech stack
 
-1. Upload
-   - Select a scanned PDF using the upload interface
-
-2. View
-   - Pages load dynamically
-   - Navigate using Next / Previous controls
-
-3. Annotate
-   - Pen: freehand notes
-   - Highlighter: mark important sections
-   - Eraser: remove annotations
-
-4. Extract
-   - OCR runs in the background
-   - Text becomes readable and searchable
+**Backend** — Python · Flask · PyMuPDF (render + text) · OpenCV · EasyOCR (PyTorch) · Gunicorn
+**Frontend** — React 19 · Vite · HTML5 Canvas · lucide-react
+**Ops** — Docker (multi-stage) · Hugging Face Spaces
 
 ---
 
-## 🤝 Contributing
+## 🚀 Quick start
 
-- Pull requests are welcome
-- Open an issue for major changes
-- Keep commits clean and focused
+### Option A — Docker (one command)
+
+```bash
+docker compose up --build
+# open http://localhost:7860
+```
+
+### Option B — Local dev
+
+```bash
+# Backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python server.py                 # API on :5002
+
+# Frontend (second terminal)
+cd frontend && npm install
+npm run dev                      # UI on :5173 (proxies the API)
+```
+
+> No system dependencies needed — PyMuPDF renders PDFs without Poppler.
+> EasyOCR downloads its models on first use (CPU works; a CUDA GPU is used
+> automatically if present).
+
+---
+
+## ⚙️ Configuration
+
+All optional, via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `OCR_ENGINE` | `easyocr` | `easyocr` (printed) · `tesseract` · `paddle` · `trocr` (handwriting) |
+| `RENDER_DPI` | `220` | Page render resolution (300 = sharper, slower) |
+| `MIN_EMBEDDED_WORDS` | `3` | Words needed to treat a page as digital vs a scan |
+| `OCR_MIN_CONF` | `0.3` | Drop OCR results below this confidence |
+| `EASYOCR_GPU` | auto | `1`/`0` to force GPU/CPU |
+| `MAX_PAGES` / `MAX_UPLOAD_MB` | `300` / `50` | Upload guardrails |
+
+---
+
+## 🧪 Tests & benchmark
+
+```bash
+pytest -q                        # fast — digital-PDF tests skip the OCR model
+python benchmark.py some.pdf     # per-page timing + embedded/ocr breakdown
+```
+
+---
+
+## 🗺️ Roadmap
+
+- Persist annotations to disk / export an annotated PDF
+- Real thumbnail previews in the sidebar
+- Multi-language OCR toggle
+- Optional deskew for low-quality scans
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License**.  
-See the `LICENSE` file for details.
+[MIT](LICENSE) © Saachi

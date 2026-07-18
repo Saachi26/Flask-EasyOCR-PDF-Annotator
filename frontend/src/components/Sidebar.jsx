@@ -1,6 +1,8 @@
 import React from 'react';
 
-export default function Sidebar({ pageData, onPageChange }) {
+const API_URL = import.meta.env.VITE_API_URL || "";
+
+export default function Sidebar({ pageData, onGoTo }) {
   if (!pageData) return null;
 
   return (
@@ -8,16 +10,22 @@ export default function Sidebar({ pageData, onPageChange }) {
       <div className="sidebar-header">
         Pages ({pageData.total_pages})
       </div>
-      
+
       <div className="thumbnails-list">
         {Array.from({ length: pageData.total_pages }, (_, i) => i + 1).map((pageNum) => (
-          <div 
+          <div
             key={pageNum}
             className={`thumbnail-item ${pageData.current_page === pageNum ? 'active' : ''}`}
-            onClick={() => onPageChange(pageNum - pageData.current_page)} 
+            onClick={() => onGoTo(pageNum)}
           >
+            <img
+              className="thumb-img"
+              src={`${API_URL}/thumbnail/${encodeURIComponent(pageData.filename)}/${pageNum}`}
+              alt={`Page ${pageNum}`}
+              loading="lazy"
+              draggable={false}
+            />
             <span className="page-number">{pageNum}</span>
-            <div className="thumb-placeholder">Page {pageNum}</div>
           </div>
         ))}
       </div>
