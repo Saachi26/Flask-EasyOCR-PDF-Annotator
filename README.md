@@ -9,25 +9,17 @@
 ![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![PyTorch](https://img.shields.io/badge/EasyOCR-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-
-
-<p align="center">
-  <img src="screenshots/demo.gif" alt="DocuLens demo" width="820">
-</p>
-
----
-
 ## The problem
 
-A huge share of the world's documents — textbooks, contracts, archives, receipts —
-exist only as **scanned images inside PDFs**. To a computer they're just pictures:
+A huge share of the world's documents—textbooks, contracts, archives, receipts—exist only as **scanned images inside PDFs**. To a computer, they're just pictures:
 
-- ❌ Text can't be selected, searched, or copied
-- ❌ You can't highlight or annotate meaningfully
-- ❌ They behave like flat images, not documents
+❌ Text can't be selected, searched, or copied
 
-**DocuLens** makes them behave like real documents — in the browser.
+❌ You can't highlight or annotate meaningfully
 
+❌ They behave like flat images, not documents
+
+**DocuLens** makes them behave like real documents—in the browser.
 ---
 
 ## ✨ Features
