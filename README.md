@@ -10,13 +10,7 @@
 ![PyTorch](https://img.shields.io/badge/EasyOCR-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
-_[Live Demo](#) · [How it works](#-how-it-works) · [Quick start](#-quick-start)_
 
-</div>
-
-> **Replace the links above** with your Hugging Face Space URL once deployed (see [DEPLOY.md](DEPLOY.md)).
-
-<!-- Add a screen recording here — this is the single most important thing an interviewer sees. -->
 <p align="center">
   <img src="screenshots/demo.gif" alt="DocuLens demo" width="820">
 </p>
